@@ -3,7 +3,8 @@ import { Connection, PublicKey, LogsFilter, Logs } from "@solana/web3.js";
 import { struct, u8, LIQUIDITY_STATE_LAYOUT_V4, u64, publicKey } from "@raydium-io/raydium-sdk";
 
 import { AppConfig } from "../../config/config";
-import {IPoolScanner, IBasicEvent, BasicEvent, IPool} from '../IPoolScanner'
+import {IBasicEvent, BasicEvent} from '../../config/IBasicEvent';
+import {IPoolScanner,IPool} from '../IPoolScanner'
 import {TokenCheck} from '../../tokens/tockenChecks';
 import { RadyumPool } from "./RadyumPool";
 
@@ -83,7 +84,7 @@ export class RadyumPoolScanner implements IPoolScanner
             if (!baseMint || !poolId || !solAmount) return
 
             // Pool found and solana amount
-            AppConfig.Logger.info('Found Pool Address : ' + poolId + ' SOL Amount : ' + solAmount.toString());
+            AppConfig.Logger.info(`Found Pool Address [${poolId}] Token Mint [${baseMint}] SOL Amount [${solAmount.toString()}`);
 
             if (solAmount > AppConfig.MaxPoolAmount || solAmount < AppConfig.MinPoolAmount) {
                 AppConfig.Logger.info('   Pool size of range');
@@ -121,8 +122,11 @@ export class RadyumPoolScanner implements IPoolScanner
                     return undefined;
                 }
             }   
-            console.log(oPoolState);
-            return new RadyumPool(oThis, poolId, baseMint);
+
+            const oResult = await RadyumPool.create(oThis, oThis.m_oConnection,  poolId, baseMint);
+            if( oResult == undefined ) return undefined;
+
+            return oResult;
             /*
     
                 if (running) saveNewPool(poolId.toString(), baseMint.toString())

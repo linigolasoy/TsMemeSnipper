@@ -2,10 +2,11 @@
 // import { Connection, PublicKey, LogsFilter } from "@solana/web3.js";
 // import { struct, u8, u64, publicKey } from "@raydium-io/raydium-sdk";
 
-
 import { AppConfig } from "./config/config";
 import { IPool, IPoolScanner } from './pools/IPoolScanner';
 import { PoolFactory } from './pools/poolFactory'
+import { IPosition, ITrader, IWallet } from "./trading/ITrader";
+import { TradeFactory } from "./trading/tradeFactory";
 
 
 
@@ -26,15 +27,26 @@ AppConfig.load();
 
 const main = async() => {
 
+    const oWallet: IWallet = TradeFactory.createWallet(AppConfig.PrivateKey);
     const oScanner : IPoolScanner = PoolFactory.createRadyumScanner();
+    const oTrader : ITrader = TradeFactory.createRadyumTrader(oWallet);
+
 
     AppConfig.Logger.info("App starting...");
+
+    oTrader.OnTrade.on( (oPosition: IPosition | undefined) => {
+        if( oPosition == undefined ) return;
+        AppConfig.Logger.info(`Acting on position`);
+    });
 
     oScanner.OnNewPool.on( async (oPool : IPool | undefined) => 
     {
         if( oPool == undefined ) return;
         AppConfig.Logger.info(`New pool Id [${oPool.PoolId}] Token [${oPool.PoolToken}]`);
+        await oTrader.actOnPool(oPool);
     });
+
+    await oTrader.start();
     await oScanner.start();
     var bExit : boolean = false;
 
@@ -46,8 +58,10 @@ const main = async() => {
     }
 
 
-    await oScanner.stop();
 
+    await oScanner.stop();
+    await AppConfig.sleep(2000);
+    await oTrader.stop();
     /*
     if( AppConfig.RpcUrl == undefined ) return;
 

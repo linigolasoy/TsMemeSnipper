@@ -13,6 +13,7 @@ class BaseLogger extends Logger<ILogObj> implements ILogger
     constructor()
     {
         super();
+        this.settings.prettyLogTimeZone = 'local';
     }
 
 }
@@ -26,7 +27,7 @@ export abstract class AppConfig
 
     public static RpcUrl : string | undefined;
     public static WssUrl : string | undefined;
-
+    public static PrivateKey: string;
     public static MinPoolAmount : number = 5;
     public static MaxPoolAmount : number = 200;
     public static PoolMintRenounceCheck : boolean = true;
@@ -44,7 +45,7 @@ export abstract class AppConfig
     {
         this.RpcUrl = process.env.RPC_URL;
         this.WssUrl = process.env.WSS_URL;
-
+        this.PrivateKey = (process.env.PRIVATE_KEY == undefined ? "": process.env.PRIVATE_KEY);
         this.Logger = new BaseLogger();
         return true;
     }
