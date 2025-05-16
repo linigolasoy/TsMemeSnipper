@@ -1,37 +1,61 @@
-import lo from "lodash";
-import { Connection, PublicKey, LogsFilter } from "@solana/web3.js";
-import { struct, u8, u64, publicKey } from "@raydium-io/raydium-sdk";
+// import lo from "lodash";
+// import { Connection, PublicKey, LogsFilter } from "@solana/web3.js";
+// import { struct, u8, u64, publicKey } from "@raydium-io/raydium-sdk";
 
 
 import { AppConfig } from "./config/config";
+import { IPool, IPoolScanner } from './pools/IPoolScanner';
+import { PoolFactory } from './pools/poolFactory'
 
 
 
 AppConfig.load();
 
-const sleep = (ms:number) => {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
 
-export const LOG_TYPE = struct([u8("log_type")]);
-export const RAY_IX_TYPE = {
-    CREATE_POOL: 0,
-    ADD_LIQUIDITY: 1,
-    BURN_LIQUIDITY: 2,
-    SWAP: 3,
-  };
+// export const LOG_TYPE = struct([u8("log_type")]);
+// export const RAY_IX_TYPE = {
+//     CREATE_POOL: 0,
+//     ADD_LIQUIDITY: 1,
+//     BURN_LIQUIDITY: 2,
+//     SWAP: 3,
+//   };
+
+
+
+
 
 const main = async() => {
 
-    if( AppConfig.RpcUrl == undefined ) return;
+    const oScanner : IPoolScanner = PoolFactory.createRadyumScanner();
+
     AppConfig.Logger.info("App starting...");
+
+    oScanner.OnNewPool.on( (oPool : IPool | undefined) => 
+    {
+        AppConfig.Logger.info("New pool");
+    });
+    await oScanner.start();
+    var bExit : boolean = false;
+
+
+    while( !bExit )
+    {
+        await AppConfig.sleep(2000);
+
+    }
+
+
+    await oScanner.stop();
+
+    /*
+    if( AppConfig.RpcUrl == undefined ) return;
 
     const oConnection = new Connection(AppConfig.RpcUrl, { wsEndpoint: AppConfig.WssUrl });
 
-    const oWallet = new PublicKey("BEMZ2yGTwLfxb1tmWHJzURaDSwobp5L6Z6JKMATMyYK3");
-    const oBalance = await oConnection.getBalance(oWallet)
+    // const oWallet = new PublicKey("BEMZ2yGTwLfxb1tmWHJzURaDSwobp5L6Z6JKMATMyYK3");
+    // const oBalance = await oConnection.getBalance(oWallet)
 
-    const oSlot = await oConnection.getSlot("confirmed");
+    // const oSlot = await oConnection.getSlot("confirmed");
     
     var nLogs : number = 0;
     const oRadyumProgram = new PublicKey('675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8');
@@ -78,12 +102,11 @@ const main = async() => {
     
     // Send a request.
     // 2KaxgGdjhDGfzFTzhUVXwqDjoXDexEfHoMk31sXYXJoHXfYeQMmCpjuUdo9UjtVVLGcbSbC4yfowcimnZe22FdXF
-    console.log(oSlot)
-    await sleep(300000); //Wait 10 seconds for Socket Testing
-    console.log(oSubsId)
+    await AppConfig.sleep(10000); //Wait 10 seconds for Socket Testing
     await oConnection.removeOnLogsListener(oSubsId);
-    await sleep(1000);
+    await AppConfig.sleep(1000);
     AppConfig.Logger.info("App ended...");
+    */
 
 }
 

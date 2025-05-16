@@ -10,7 +10,7 @@
             "type": "node",
             "request": "launch",
             "args": [
-                "${relativeFile}"
+                "src/index.ts"
             ],
             "runtimeArgs": [
                 "-r",

@@ -17,8 +17,6 @@
     "lodash": "^4.17.21",
     "ts-node": "^10.9.2",
     "tslog": "^4.9.3",
-    "typescript": "^5.8.3",
-    "typescript-logging": "^2.2.0",
-    "typescript-logging-category-style": "^2.2.0"
+    "typescript": "^5.8.3"
   }
 }
