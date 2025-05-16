@@ -1,10 +1,11 @@
 import lo from "lodash";
 import { Connection, PublicKey, LogsFilter, Logs } from "@solana/web3.js";
-import { struct, u8, u64, publicKey } from "@raydium-io/raydium-sdk";
+import { struct, u8, LIQUIDITY_STATE_LAYOUT_V4, u64, publicKey } from "@raydium-io/raydium-sdk";
 
 import { AppConfig } from "../../config/config";
 import {IPoolScanner, IBasicEvent, BasicEvent, IPool} from '../IPoolScanner'
-
+import {TokenCheck} from '../../tokens/tockenChecks';
+import { RadyumPool } from "./RadyumPool";
 
 /**
  * Radyum implementation of pool scanner
@@ -18,6 +19,8 @@ export class RadyumPoolScanner implements IPoolScanner
     private m_oConnection : Connection | undefined = undefined;
     private static m_nLogs : number = 0;
     private readonly LOG_COUNT_INTERVAL : number = 500;
+    private static SOL_ADDRESS = new PublicKey("So11111111111111111111111111111111111111112");
+
 
     private m_nSubsId : number = -1;
 
@@ -43,14 +46,99 @@ export class RadyumPoolScanner implements IPoolScanner
     private static async evalPool(oThis: RadyumPoolScanner, strSignature : string): Promise<IPool | undefined>
     {
 
-        if( oThis.m_oConnection == undefined ) return undefined;
+        try
+        {
+            if( oThis.m_oConnection == undefined ) return undefined;
 
-        const oTx = await oThis.m_oConnection.getParsedTransaction(strSignature, {
-            maxSupportedTransactionVersion: 0,
-            commitment: 'confirmed'
-        })
+            const oTx = await oThis.m_oConnection.getParsedTransaction(strSignature, {
+                maxSupportedTransactionVersion: 0,
+                commitment: 'confirmed'
+            })
+            if( oTx == null || oTx.meta == null ) return undefined;
 
-        return {};
+            const innerInstructions = oTx.meta.innerInstructions
+            const postTokenBalances = oTx.meta.postTokenBalances
+            let baseMint: string = ''
+            let poolId: string = ''
+            let solAmount: number = 0
+            innerInstructions?.map((mt: any) => {
+                    mt.instructions.map((item: any) => {
+                        // @ts-ignore
+                        if (item.parsed?.type == "initializeAccount" && item.parsed?.info.mint.toString() != RadyumPoolScanner.SOL_ADDRESS.toString()) {
+                        // @ts-ignore
+                        baseMint = item.parsed?.info.mint.toString()
+                    }
+                    // @ts-ignore
+                    if (item.parsed?.type == "allocate" && item.parsed?.info.space == 752) {
+                        // @ts-ignore
+                        poolId = item.parsed?.info.account.toString()
+                    }
+                })
+            });
+
+            postTokenBalances?.map((balance: any) => {
+                if (balance.mint == RadyumPoolScanner.SOL_ADDRESS.toString() && balance.owner == "5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1" && balance.programId == "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA") solAmount = balance.uiTokenAmount.uiAmount
+            })
+    
+            if (!baseMint || !poolId || !solAmount) return
+
+            // Pool found and solana amount
+            AppConfig.Logger.info('Found Pool Address : ' + poolId + ' SOL Amount : ' + solAmount.toString());
+
+            if (solAmount > AppConfig.MaxPoolAmount || solAmount < AppConfig.MinPoolAmount) {
+                AppConfig.Logger.info('   Pool size of range');
+                return
+            }
+
+            // Get pool info
+            const oPoolAccountInfo = await oThis.m_oConnection.getAccountInfo(new PublicKey(poolId))
+            if( oPoolAccountInfo == undefined || oPoolAccountInfo == null ) return undefined;
+
+            const oPoolState = LIQUIDITY_STATE_LAYOUT_V4.decode(oPoolAccountInfo.data)
+
+
+            if( AppConfig.PoolMintRenounceCheck || AppConfig.PoolMintBurnedCheck || AppConfig.PoolMintFrozenCheck)
+            {
+
+                const oStatus = await TokenCheck.GetTokenStatus(oThis.m_oConnection, new PublicKey(baseMint), oPoolState.lpMint);
+                if( oStatus == undefined ) return undefined;
+
+                if( AppConfig.PoolMintRenounceCheck && !oStatus.MintRenounced )
+                {
+                    AppConfig.Logger.warn('   Skipping...Pool mint not renounced');
+                    return undefined;
+                }
+
+                if( AppConfig.PoolMintBurnedCheck && !oStatus.Burned )
+                {
+                    AppConfig.Logger.warn('   Skipping...Token not burned');
+                    return undefined;
+                }
+    
+                if( AppConfig.PoolMintFrozenCheck && !oStatus.Freezed )
+                {
+                    AppConfig.Logger.warn('   Skipping...Pool mint not freezed');
+                    return undefined;
+                }
+            }   
+            console.log(oPoolState);
+            return new RadyumPool(oThis, poolId, baseMint);
+            /*
+    
+                if (running) saveNewPool(poolId.toString(), baseMint.toString())
+                const poolKeys = jsonInfo2PoolKeys(await formatAmmKeysById(poolId.toString())) as LiquidityPoolKeys
+                if (autoBuy && !processingToken) {
+                    processingToken = true
+                    console.log('buying processingToken', processingToken)
+                    await buy(new PublicKey(poolId), new PublicKey(baseMint), poolKeys)
+                }
+            }
+            */  
+        }
+        catch(e)
+        {
+            AppConfig.Logger.error("Error getting pool info", e);
+        }
     }
 
 
@@ -60,11 +148,11 @@ export class RadyumPoolScanner implements IPoolScanner
         if( oLog.err != undefined || oLog.err != null  ) return;
 
         const ray_log = lo.find(oLog.logs, (y) => y.includes("ray_log"));
-        if( ray_log == undefined && ray_log == null ) return;
+        if( ray_log == undefined || ray_log == null ) return;
 
         const match = ray_log.match(/ray_log: (.*)/)
 
-        if (match == undefined || match?.length <= 0 ) return;
+        if (match == undefined || match == null || match?.length <= 0 ) return;
 
         RadyumPoolScanner.m_nLogs++;
         const ray_data = Buffer.from(

@@ -6,7 +6,12 @@
  */
 export interface IPool
 {
+    get PoolScanner() : IPoolScanner;
 
+    get PoolId() : string;
+    get PoolToken() : string;
+
+    get PoolData(): unknown;
 }
 
 

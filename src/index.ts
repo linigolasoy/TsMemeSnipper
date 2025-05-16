@@ -30,9 +30,10 @@ const main = async() => {
 
     AppConfig.Logger.info("App starting...");
 
-    oScanner.OnNewPool.on( (oPool : IPool | undefined) => 
+    oScanner.OnNewPool.on( async (oPool : IPool | undefined) => 
     {
-        AppConfig.Logger.info("New pool");
+        if( oPool == undefined ) return;
+        AppConfig.Logger.info(`New pool Id [${oPool.PoolId}] Token [${oPool.PoolToken}]`);
     });
     await oScanner.start();
     var bExit : boolean = false;

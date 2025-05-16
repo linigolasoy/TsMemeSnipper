@@ -10,7 +10,7 @@ export interface ILogger
 
     warn( strMessage: string ): void;
     
-    error( strMessage: string, e : Error | undefined ): void;
+    error( strMessage: string, e : Error | unknown ): void;
     
 
 }
