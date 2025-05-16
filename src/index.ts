@@ -55,6 +55,8 @@ const main = async() => {
     {
         await AppConfig.sleep(2000);
 
+        await oTrader.step();
+
     }
 
 

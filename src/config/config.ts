@@ -28,11 +28,12 @@ export abstract class AppConfig
     public static RpcUrl : string | undefined;
     public static WssUrl : string | undefined;
     public static PrivateKey: string;
-    public static MinPoolAmount : number = 5;
-    public static MaxPoolAmount : number = 200;
+    public static MinPoolAmount : number = 1;
+    public static MaxPoolAmount : number = 300;
     public static PoolMintRenounceCheck : boolean = true;
     public static PoolMintFrozenCheck   : boolean = true;
     public static PoolMintBurnedCheck   : boolean = false;
+    public static SolAmount : number = 0.01;
 
     public static Logger: ILogger;
 
@@ -47,6 +48,12 @@ export abstract class AppConfig
         this.WssUrl = process.env.WSS_URL;
         this.PrivateKey = (process.env.PRIVATE_KEY == undefined ? "": process.env.PRIVATE_KEY);
         this.Logger = new BaseLogger();
+
+        if( process.env.SOL_AMOUNT != undefined )
+        {
+            this.SolAmount = Number(process.env.SOL_AMOUNT);
+        }
+        
         return true;
     }
 }

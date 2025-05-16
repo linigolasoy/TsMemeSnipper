@@ -84,7 +84,7 @@ export class RadyumPoolScanner implements IPoolScanner
             if (!baseMint || !poolId || !solAmount) return
 
             // Pool found and solana amount
-            AppConfig.Logger.info(`Found Pool Address [${poolId}] Token Mint [${baseMint}] SOL Amount [${solAmount.toString()}`);
+            AppConfig.Logger.info(`Found Pool Address [${poolId}] Token Mint [${baseMint}] SOL Amount [${solAmount.toString()}]`);
 
             if (solAmount > AppConfig.MaxPoolAmount || solAmount < AppConfig.MinPoolAmount) {
                 AppConfig.Logger.info('   Pool size of range');

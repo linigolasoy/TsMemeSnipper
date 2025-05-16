@@ -1,4 +1,4 @@
-
+import lo from "lodash";
 import {Liquidity, TokenAmount, Token} from '@raydium-io/raydium-sdk';
 import { ITrader, IPosition, IWallet } from "../ITrader";
 import {IBasicEvent, BasicEvent} from '../../config/IBasicEvent';
@@ -13,18 +13,22 @@ import {
         SystemProgram,
         TransactionMessage,
         VersionedTransaction,
-        BlockhashWithExpiryBlockHeight,
-        Blockhash
+        AccountInfo,
+        Blockhash,
+        Logs
      } from '@solana/web3.js';
 import { 
     getAssociatedTokenAddressSync, 
+    getAssociatedTokenAddress,
     NATIVE_MINT, 
     TOKEN_PROGRAM_ID,
     createAssociatedTokenAccountInstruction,
     createSyncNativeInstruction,
-    createAssociatedTokenAccountIdempotentInstruction
+    createAssociatedTokenAccountIdempotentInstruction,
+    createCloseAccountInstruction
 } from '@solana/spl-token';
 import { blockhash } from '@solana/kit';
+import { BasePosition } from '../BasePosition';
 
 
 
@@ -40,9 +44,8 @@ export class RadyumTrader implements ITrader
     private m_oWrappedSol : PublicKey | null = null;
     private m_oWallet : IWallet;
 
-    private static SOL_AMOUNT : number = 0.01;
 
-    private readonly m_oQuoteAmount = new TokenAmount(Token.WSOL, RadyumTrader.SOL_AMOUNT, false);
+    private readonly m_oQuoteAmount = new TokenAmount(Token.WSOL, AppConfig.SolAmount, false);
     private m_oConnection : Connection;
 
     constructor( oWallet: IWallet )
@@ -66,9 +69,12 @@ export class RadyumTrader implements ITrader
         { return this.onTradeEvent.expose(); }
     }
     
+
     public async start() : Promise<boolean>
     {
-        return false;
+
+        if( this.m_oConnection == null || this.m_oConnection == undefined ) return false;
+        return true;
     }
 
     public async stop(): Promise<boolean>
@@ -83,6 +89,89 @@ export class RadyumTrader implements ITrader
     }
 
 
+    public async step(): Promise<void>
+    {
+        for( var oPos of this.m_aPositions )
+        {
+            var dNow = new Date();
+            if( oPos.Closed ) continue;
+            const nSeconds = (dNow.getTime() - oPos.DateOpen.getTime()) / 1000;
+            if( nSeconds < 60 ) continue;
+            const bResult : boolean = await this.sell(oPos);
+            if( bResult )
+            {
+                oPos.Closed = true;
+            }
+
+            await AppConfig.sleep(2000);
+        }
+    }
+
+    // Sell 
+    private async sell( oPosition: IPosition ): Promise<boolean>
+    {
+        try
+        {
+            const oMint : PublicKey = new PublicKey(oPosition.Pool.PoolToken);
+            const sourceAccount = await getAssociatedTokenAddress(
+                new PublicKey(oMint),
+                this.Wallet.Address
+            );
+            if (!sourceAccount) {
+                AppConfig.Logger.error("Sell token account not exist", undefined);
+                return true;
+            }
+
+            const info = await this.m_oConnection.getTokenAccountBalance(sourceAccount)
+            const amount = Number(info.value.amount)
+            const oRadPool : RadyumPool = oPosition.Pool as RadyumPool;
+            const oPoolKeys = oRadPool.LiquidityPoolKeys;
+
+            if (amount == 0 || oPoolKeys == null || this.m_oWrappedSol == null) {
+                AppConfig.Logger.error("Not balance", undefined);
+                return false;
+            }
+
+            AppConfig.Logger.info( `>>>>>> SELLING [${oPosition.Pool.PoolToken}] Amount [${amount.toString()}]`)
+            const { innerTransaction } = Liquidity.makeSwapFixedInInstruction(
+                {
+                    poolKeys: oPoolKeys,
+                    userKeys: {
+                        tokenAccountOut: this.m_oWrappedSol,
+                        tokenAccountIn: sourceAccount,
+                        owner: this.Wallet.Address,
+                    },
+                    amountIn: amount,
+                    minAmountOut: 0,
+                },
+                4,
+            )
+
+            const latestBlockhash = await this.m_oConnection.getLatestBlockhash({
+                commitment: 'confirmed',
+            })
+
+            const messageV0 = new TransactionMessage({
+                payerKey: this.Wallet.Address,
+                recentBlockhash: latestBlockhash.blockhash,
+                instructions: [
+                    ...innerTransaction.instructions,
+                    createCloseAccountInstruction(this.m_oWrappedSol, this.Wallet.Address, this.Wallet.Address),
+                ],
+            }).compileToV0Message()
+
+            const transaction = new VersionedTransaction(messageV0)
+            transaction.sign([this.Wallet.Signer, ...innerTransaction.signers])
+
+            return await this.executeTransaction(transaction, latestBlockhash.blockhash);
+        }    
+        catch (e: any) {
+            AppConfig.Logger.error('Error on sell', e);
+            await AppConfig.sleep(1000)
+        }
+
+        return false;
+    }
 
     private async executeTransaction( oTransaction: VersionedTransaction, oLatestBlock: Blockhash): Promise<boolean>
     {
@@ -124,6 +213,8 @@ export class RadyumTrader implements ITrader
         }
           
     }
+
+
 
     // Execute buy on pool
     // const buy = async (accountId: PublicKey, baseMint: PublicKey, poolKeys: LiquidityPoolKeysV4): Promise<void> =>
@@ -175,7 +266,7 @@ export class RadyumTrader implements ITrader
                 SystemProgram.transfer({
                     fromPubkey: this.Wallet.Address,
                     toPubkey: this.m_oWrappedSol,
-                    lamports: Math.ceil(RadyumTrader.SOL_AMOUNT * 10 ** 9),
+                    lamports: Math.ceil(AppConfig.SolAmount * 10 ** 9),
                 }),
                 createSyncNativeInstruction(this.m_oWrappedSol, TOKEN_PROGRAM_ID),
                 createAssociatedTokenAccountIdempotentInstruction(
@@ -219,11 +310,12 @@ export class RadyumTrader implements ITrader
             if (!res) 
             {
                 AppConfig.Logger.error('Buy failed', undefined);
+                return false;
             }
-            /*
-            }
-            console.log('bought success')
-            */
+
+            const oPosition: IPosition = new BasePosition(this, oPool, AppConfig.SolAmount);
+            this.m_aPositions.push(oPosition);
+            return true;
         } catch (e) 
         {
             AppConfig.Logger.error('Error on buy', e);

@@ -4,12 +4,30 @@ import { IPool } from '../pools/IPoolScanner';
 
 
 
-
+/**
+ * Position representation
+ */
 export interface IPosition 
 {
+    get DateOpen(): Date;
+    get DateClose(): Date;
+    get Pool(): IPool;
 
+    get Trader(): ITrader;
+
+    get BaseAmount(): number;
+    get QuoteAmount(): number;
+
+    get PriceOpen(): number;
+    get PriceClose(): number;
+
+    get Closed(): boolean;
+    set Closed( bClose: boolean );
 }
 
+/**
+ * Wallet representation
+ */
 export interface IWallet 
 {
     get Address(): PublicKey;
@@ -20,6 +38,9 @@ export interface IWallet
 }
 
 
+/**
+ * Trading interface
+ */
 export interface ITrader 
 {
     get Wallet(): IWallet;
@@ -33,4 +54,6 @@ export interface ITrader
     stop(): Promise<boolean>;
 
     actOnPool( oPool: IPool ) : Promise<boolean>;
+
+    step(): Promise<void>;
 }
